@@ -3,8 +3,8 @@ from flask_jwt_extended import JWTManager
 from flask_pymongo import PyMongo
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from urllib.parse import quote_plus
 import os
+from urllib.parse import quote_plus
 
 mongo = PyMongo()
 jwt = JWTManager()
@@ -21,6 +21,7 @@ class Config:
         f"mongodb+srv://{quote_plus(MONGO_USERNAME)}:{quote_plus(MONGO_PASSWORD)}@{MONGO_CLUSTER}/"
         f"{MONGO_DB}?retryWrites=true&w=majority"
     )
+
 
 def create_app():
     app = Flask(__name__)
