@@ -1,6 +1,7 @@
 import logging
 from app import mongo
 
+
 logging.basicConfig(level=logging.INFO)
 
 def test_signup_valid(client, user_data, setup_user_in_db):
@@ -18,6 +19,7 @@ def test_signup_valid(client, user_data, setup_user_in_db):
 
     mongo.db.users.delete_many({"email": user_data["email"]})
 
+
 def test_login_valid(client, setup_user_in_db, user_data):
     response = client.post("/auth/login", json={
         "email": user_data["email"], 
@@ -25,8 +27,8 @@ def test_login_valid(client, setup_user_in_db, user_data):
         })
     assert response.status_code == 200
     assert "access_token" in response.json
-    
-    
+
+
 def test_login_invalid_email(client, user_data):
     """
     Test case for login with an invalid email.

@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, create_refresh_token
 from werkzeug.security import check_password_hash, generate_password_hash
 from .. import mongo
+from app.models import db_models
 
 
 auth_blueprint = Blueprint("auth", __name__, url_prefix="/auth")
@@ -11,11 +12,19 @@ def signup():
     data = request.json
     if not data or not all(k in data for k in ("username", "email", "password")):
         return jsonify({"error": "Invalid input"}), 400
+    
+    user_model = db_models.get_user_model()
+
     hashed_password = generate_password_hash(data["password"])
-    data["password"] = hashed_password
-    data["deleted"] = False
-    mongo.db.users.insert_one(data)
+    
+    user_model["username"] = data["username"]
+    user_model["email"] = data["email"]
+    user_model["password"] = hashed_password
+    
+    mongo.db.users.insert_one(user_model)
+
     return jsonify({"message": "User registered successfully"}), 201
+
 
 @auth_blueprint.route("/login", methods=["POST"] )
 def login():

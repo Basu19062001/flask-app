@@ -108,7 +108,8 @@ def test_restore_user(client, setup_user_in_db, app):
     response = client.post(f"/users/restore/{user_id}", headers=headers)
 
     assert response.status_code ==200
-    assert response.json["message"] == "User restored"    
+    assert response.json["message"] == "User restored"
+    
     
 
 

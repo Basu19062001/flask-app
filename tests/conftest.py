@@ -2,6 +2,8 @@ import pytest
 from app import create_app, mongo
 from werkzeug.security import generate_password_hash
 import logging
+from datetime import datetime, timezone
+from app.models import db_models
 
 
 logging.basicConfig(level=logging.INFO)
@@ -33,15 +35,22 @@ def login_data():
 
 @pytest.fixture
 def setup_user_in_db(user_data):
+    
     hashed_password = generate_password_hash(user_data["password"])
+    
     existing_user = mongo.db.users.find_one({"email": user_data["email"]})
+    
     if not existing_user:
-        mongo.db.users.insert_one({
-            "username": user_data["username"],
-            "email": user_data["email"],
-            "password": hashed_password,
-            "deleted": False
-        })
+        user_model = db_models.get_user_model()
+        
+        user_model["username"] = user_data["username"]
+        user_model["email"] = user_data["email"]
+        user_model["password"] = hashed_password
+        user_model["deleted"] = False
+        user_model["created_at"] = user_model["updated_at"] = datetime.now(timezone.utc)
+        
+        mongo.db.users.insert_one(user_model)
+        
         logging.info(f"Inserted user: {user_data['email']}")
     else:
         logging.info(f"User {user_data['email']} already exists.")

@@ -3,6 +3,8 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from bson.objectid import ObjectId
 from .. import mongo
 from datetime import datetime, timezone
+from werkzeug.security import generate_password_hash
+from app.models import db_models
 
 users_blueprint = Blueprint("users", __name__, url_prefix="/users")
 
@@ -13,7 +15,10 @@ def get_users():
     return jsonify([{
         "id": str(user["_id"]),
         "username": user["username"],
-        "email": user["email"]
+        "email": user["email"],
+        "deleted": user.get("deleted", False),
+        "updated_at": user.get("updated_at", None),
+        "created_at": user.get("created_at", None)
     } for user in users]), 200
 
 
@@ -26,7 +31,10 @@ def get_user_by_id(user_id):
     return jsonify({
         "id": str(user["_id"]),
         "username": user["username"],
-        "email": user["email"]
+        "email": user["email"],
+        "created_at": user.get("created_at", None),
+        "updated_at": user.get("updated_at", None),
+        "deleted": user.get("deleted", False)
     }), 200
 
 @users_blueprint.route("/<user_id>", methods=["PUT"])
@@ -35,22 +43,40 @@ def update_user_by_id(user_id):
     user = mongo.db.users.find_one({"_id": ObjectId(user_id)}, {"deleted": False})
     if not user:
         return jsonify({"error": "User not found"}), 404
-    mongo.db.users.update_one({"_id": ObjectId(user_id)}, {"$set": request.json})
+    
+    allowed_fields = ["username", "email", "password"]
+    updated_data = {}
+
+    for field in allowed_fields:
+        if field in request.json:
+            updated_data[field] = request.json[field]
+    
+    if "password" in request.json:
+        updated_data["password"] = generate_password_hash(request.json["password"])
+    
+    updated_data["updated_at"] = datetime.now(timezone.utc)
+
+    mongo.db.users.update_one({"_id": ObjectId(user_id)}, {"$set":updated_data})
     return jsonify({"message": "User updated"}), 200
 
 @users_blueprint.route("/<user_id>", methods=["DELETE"])
 @jwt_required()
 def delete_user(user_id):
     current_user = get_jwt_identity()
+
     user = mongo.db.users.find_one({"_id": ObjectId(user_id)})
+    
     if not user:
         return jsonify({"error": "User not found"}), 404
-    mongo.db.trash.insert_one({
-        "original_user_id": ObjectId(user_id),
-        "deleted_at": datetime.now(timezone.utc),
-        "deleted_by": current_user,
-        "reason": request.json.get("reason", "No reason provided")
-    })
+    
+    trash_model = db_models.get_trash_model()
+    trash_model["original_user_id"] = ObjectId(user_id)
+    trash_model["deleted_at"] = datetime.now(timezone.utc)
+    trash_model["deleted_by"] = current_user
+    trash_model["reason"] = request.json.get("reason", "No reason provided")
+
+    mongo.db.trash.insert_one(trash_model)
+
     mongo.db.users.update_one({"_id": ObjectId(user_id)}, {"$set": {"deleted": True}})
     return jsonify({"message": "User soft-deleted"}), 200
 
@@ -65,15 +91,21 @@ def batch_delete_users():
         return jsonify({"error": "No user IDs provided"}), 400
     
     current_user = get_jwt_identity()
+    
     users = mongo.db.users.find({"_id": {"$in": [ObjectId(user_id) for user_id in user_ids]}, "deleted":  False})
+    print(users)
+
 
     for user in users:
-        mongo.db.trash.insert_one({
-            "original_user_id": user["_id"],
-            "deleted_at": datetime.now(timezone.utc),
-            "deleted_by": current_user,
-            "reason": data.get("reason", "No reason provided")
-        })
+        trash_model = db_models.get_trash_model()
+        
+        trash_model["original_user_id"] = user["_id"]
+        trash_model["deleted_at"] = datetime.now(timezone.utc)
+        trash_model["deleted_by"] = current_user
+        trash_model["reason"] = data.get("reason", "No reason provided")
+        
+        mongo.db.trash.insert_one(trash_model)
+
         mongo.db.users.update_one({"_id": user["_id"]}, {"$set": {"deleted": True}})
 
     return jsonify({"message": f"soft-deleted {len(user_ids)} users"}), 200
