@@ -1,3 +1,4 @@
+README.md
 setup.py
 app/__init__.py
 gusml.egg-info/PKG-INFO
